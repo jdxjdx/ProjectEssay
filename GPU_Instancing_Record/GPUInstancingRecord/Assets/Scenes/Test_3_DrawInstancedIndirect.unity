@@ -156,6 +156,9 @@ MonoBehaviour:
   instanceMesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
   instanceMaterial: {fileID: 2100000, guid: 181da28c870306b47b1bd2506ea0a603, type: 2}
   subMeshIndex: 0
+  objectBoundMin: {x: -0.5, y: -0.5, z: -0.5}
+  objectBoundMax: {x: 0.5, y: 0.5, z: 0.5}
+  cullingComputeShader: {fileID: 7200000, guid: e7a43fceaca88f2489cda10ef6013a6b, type: 3}
 --- !u!4 &323785411
 Transform:
   m_ObjectHideFlags: 0

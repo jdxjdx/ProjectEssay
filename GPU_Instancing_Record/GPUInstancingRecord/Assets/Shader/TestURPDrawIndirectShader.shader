@@ -30,6 +30,8 @@ Shader "Custom/TestURPDrawIndirectShader"
         // 修改：所有物体的复合变换矩阵
         StructuredBuffer<float4x4> matricesBuffer;
         StructuredBuffer<float4> colorsBuffer;
+        // 新增：可见物体实例ID
+        StructuredBuffer<uint> visibleIDsBuffer;
 #endif
         CBUFFER_END
 
@@ -78,8 +80,8 @@ Shader "Custom/TestURPDrawIndirectShader"
             {
                 Varyings OUT;
             #if SHADER_TARGET >= 45
-                float4x4 data = matricesBuffer[instanceID];
-                float4 color = colorsBuffer[instanceID];
+                float4x4 data = matricesBuffer[visibleIDsBuffer[instanceID]];
+                float4 color = colorsBuffer[visibleIDsBuffer[instanceID]];
             #else
                 float4x4 data = 0;
                 float4 color = 1
@@ -152,7 +154,7 @@ Shader "Custom/TestURPDrawIndirectShader"
             Varyings Vertex(Attributes IN, uint instanceID : SV_InstanceID)
             {
             #if SHADER_TARGET >= 45
-                float4x4 data = matricesBuffer[instanceID];
+                float4x4 data = matricesBuffer[visibleIDsBuffer[instanceID]];
             #else
                 float4x4 data = 0;
             #endif

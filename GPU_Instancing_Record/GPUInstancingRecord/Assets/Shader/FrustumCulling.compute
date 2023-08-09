@@ -1,0 +1,42 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+float4 _FrustumPlanes[6];   // 视锥体的六个面
+float3 _BoundMin;   // 物体包围盒最小点
+float3 _BoundMax;   // 物体包围盒最大点
+StructuredBuffer<float4x4> _MatricesBuffer;   // 所有物体的复合变换矩阵
+AppendStructuredBuffer<uint> _VisibleIDsBuffer;  // 可见物体实例ID
+
+bool IsOutsideThePlane(float4 plane, float3 position)
+{
+    return dot(plane.xyz, position) + plane.w > 0;
+}
+
+[numthreads(640, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
+{
+    float4x4 m = _MatricesBuffer[id.x];
+    float4 boundPoints[8];
+    boundPoints[0] = mul(m, float4(_BoundMin, 1));
+    boundPoints[1] = mul(m, float4(_BoundMax, 1));
+    boundPoints[2] = mul(m, float4(_BoundMax.x, _BoundMax.y, _BoundMin.z, 1));
+    boundPoints[3] = mul(m, float4(_BoundMax.x, _BoundMin.y, _BoundMax.z, 1));
+    boundPoints[4] = mul(m, float4(_BoundMax.x, _BoundMin.y, _BoundMin.z, 1));
+    boundPoints[5] = mul(m, float4(_BoundMin.x, _BoundMax.y, _BoundMax.z, 1));
+    boundPoints[6] = mul(m, float4(_BoundMin.x, _BoundMax.y, _BoundMin.z, 1));
+    boundPoints[7] = mul(m, float4(_BoundMin.x, _BoundMin.y, _BoundMax.z, 1));
+    
+    for (int i = 0; i < 6; i++)
+    {
+        for (int j = 0; j < 8; j++)
+        {
+            float3 p = boundPoints[j].xyz;
+            if (!IsOutsideThePlane(_FrustumPlanes[i], p))
+                break;
+            if (j == 7)
+                return;
+        }
+    }
+    
+    _VisibleIDsBuffer.Append(id.x);
+}

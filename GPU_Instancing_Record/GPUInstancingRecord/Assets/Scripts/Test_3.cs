@@ -21,11 +21,43 @@ public class Test_3 : MonoBehaviour
     private int _cachedInstanceCount = -1;
     private int _cachedSubMeshIndex = -1;
     
+    // 设置物体包围盒最小点
+    public Vector3 objectBoundMin;
+    // 设置物体包围盒最大点
+    public Vector3 objectBoundMax;
+    // 设置ComputeShader
+    public ComputeShader cullingComputeShader;
+    // ComputeShader中内核函数索引
+    private int _kernel = 0;
+    // 当前可见物体的instanceID Buffer   
+    private ComputeBuffer _visibleIDsBuffer;
+    // 相机的视锥平面
+    Plane[] cameraFrustumPlanes = new Plane[6];
+    // 传入ComputeShader的视锥平面  
+    Vector4[] frustumPlanes = new Vector4[6];
+    void Start()
+    {
+        _kernel = cullingComputeShader.FindKernel("CSMain");
+    }
+    
     void Update()
     {
         // 更新Buffer
         UpdateBuffers();
         
+        // 视锥剔除
+        GeometryUtility.CalculateFrustumPlanes(Camera.main, cameraFrustumPlanes);
+        for (int i = 0; i < cameraFrustumPlanes.Length; i++)
+        {
+            var normal = -cameraFrustumPlanes[i].normal;
+            frustumPlanes[i] = new Vector4(normal.x, normal.y, normal.z, -cameraFrustumPlanes[i].distance);
+        }
+        
+        _visibleIDsBuffer.SetCounterValue(0);//初始化计数器数值
+        cullingComputeShader.SetVectorArray("_FrustumPlanes", frustumPlanes);
+        cullingComputeShader.Dispatch(_kernel, Mathf.CeilToInt(instanceCount / 640f), 1, 1);
+        ComputeBuffer.CopyCount(_visibleIDsBuffer, _argsBuffer, sizeof(uint));//获取计数器的值 从src拷贝到dst中 dstOffectBytes为在dst当中的值 在dx11平台dst类型必须为raw或者indirectArguments 其他平台可任意
+
         // 设置渲染包围盒 影响culling
         Bounds renderBounds = new Bounds(Vector3.zero, new Vector3(MAXSpace, MAXSpace, MAXSpace));
         Graphics.DrawMeshInstancedIndirect(instanceMesh, subMeshIndex, instanceMaterial, renderBounds, _argsBuffer);
@@ -60,6 +92,11 @@ public class Test_3 : MonoBehaviour
         _matricesBuffer.SetData(trs); 
         instanceMaterial.SetBuffer("matricesBuffer", _matricesBuffer);
         
+        // 新增： 可见实例 Buffer
+        _visibleIDsBuffer?.Release();
+        _visibleIDsBuffer = new ComputeBuffer(instanceCount, sizeof(uint), ComputeBufferType.Append);//	Appends a value to the end of the buffer.允许动态添加删除元素
+        instanceMaterial.SetBuffer("visibleIDsBuffer", _visibleIDsBuffer);
+        
         _colorBuffer.SetData(colors);
         instanceMaterial.SetBuffer("colorsBuffer", _colorBuffer);
         
@@ -80,6 +117,12 @@ public class Test_3 : MonoBehaviour
 
         _argsBuffer.SetData(_args);
         
+        // ComputeShader
+        cullingComputeShader.SetVector("_BoundMin", objectBoundMin);
+        cullingComputeShader.SetVector("_BoundMax", objectBoundMax);
+        cullingComputeShader.SetBuffer(_kernel, "_MatricesBuffer", _matricesBuffer);
+        cullingComputeShader.SetBuffer(_kernel, "_VisibleIDsBuffer", _visibleIDsBuffer);
+        
         _cachedInstanceCount = instanceCount;
         _cachedSubMeshIndex = subMeshIndex;
     }
@@ -88,6 +131,9 @@ public class Test_3 : MonoBehaviour
     {
         _matricesBuffer?.Release();
         _matricesBuffer = null;
+        
+        _visibleIDsBuffer?.Release();
+        _visibleIDsBuffer = null;
         
         _argsBuffer?.Release();
         _argsBuffer = null;
