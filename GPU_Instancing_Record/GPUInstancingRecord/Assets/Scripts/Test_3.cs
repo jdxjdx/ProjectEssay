@@ -11,7 +11,7 @@ public class Test_3 : MonoBehaviour
     public Material instanceMaterial;
     public int subMeshIndex = 0;
     
-    private ComputeBuffer _positionBuffer;
+    private ComputeBuffer _matricesBuffer;
     private ComputeBuffer _colorBuffer;
     private ComputeBuffer _argsBuffer;
     private uint[] _args = new uint[5] { 0, 0, 0, 0, 0 };
@@ -40,25 +40,25 @@ public class Test_3 : MonoBehaviour
         // 规范subMeshIndex
         if (instanceMesh != null)
             subMeshIndex = Mathf.Clamp(subMeshIndex, 0, instanceMesh.subMeshCount - 1);
-        //初始化位置Buffer
-        _positionBuffer?.Release();
-        _positionBuffer = new ComputeBuffer(instanceCount, sizeof(float) * 4); // float4 ==这东西也不知道有没有上线
+        //初始化物体复合变换矩阵Buffer
+        _matricesBuffer?.Release();
+        _matricesBuffer = new ComputeBuffer(instanceCount, sizeof(float) * 16);   // float4x4;
+        Matrix4x4[] trs = new Matrix4x4[instanceCount];
         //初始化颜色buffer
         _colorBuffer?.Release();
         _colorBuffer = new ComputeBuffer(instanceCount, sizeof(float) * 4); // float4
         
-        Vector4[] positions = new Vector4[instanceCount];
         Vector4[] colors = new Vector4[instanceCount];
         for (int i = 0; i < instanceCount; i++)
         {
             float size = Random.Range(0.05f, 1f);
             Vector3 pos = Random.insideUnitSphere * MAXSpace;
-            positions[i] = new Vector4(pos.x, pos.y, pos.z, size);
             colors[i] = Random.ColorHSV();
+            trs[i] = Matrix4x4.TRS(pos, Random.rotationUniform, new Vector3(size, size, size));
         }
         
-        _positionBuffer.SetData(positions); 
-        instanceMaterial.SetBuffer("positionBuffer", _positionBuffer);
+        _matricesBuffer.SetData(trs); 
+        instanceMaterial.SetBuffer("matricesBuffer", _matricesBuffer);
         
         _colorBuffer.SetData(colors);
         instanceMaterial.SetBuffer("colorsBuffer", _colorBuffer);
@@ -86,6 +86,9 @@ public class Test_3 : MonoBehaviour
     
     void OnDisable()
     {
+        _matricesBuffer?.Release();
+        _matricesBuffer = null;
+        
         _argsBuffer?.Release();
         _argsBuffer = null;
         

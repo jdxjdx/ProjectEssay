@@ -27,7 +27,8 @@ Shader "Custom/TestURPDrawIndirectShader"
         half _Gloss;
         half4 _SpecularColor;
 #if SHADER_TARGET >= 45
-        StructuredBuffer<float4> positionBuffer;
+        // 修改：所有物体的复合变换矩阵
+        StructuredBuffer<float4x4> matricesBuffer;
         StructuredBuffer<float4> colorsBuffer;
 #endif
         CBUFFER_END
@@ -59,7 +60,7 @@ Shader "Custom/TestURPDrawIndirectShader"
 
             struct Attributes
             {
-                float3 positionOS : POSITION;
+                float4 positionOS : POSITION;
                 float3 normalOS : NORMAL;
                 float2 texcoord : TEXCOORD0;
             };
@@ -75,21 +76,21 @@ Shader "Custom/TestURPDrawIndirectShader"
 
             Varyings Vertex(Attributes IN, uint instanceID : SV_InstanceID)
             {
+                Varyings OUT;
             #if SHADER_TARGET >= 45
-                float4 data = positionBuffer[instanceID];
+                float4x4 data = matricesBuffer[instanceID];
                 float4 color = colorsBuffer[instanceID];
             #else
-                float4 data = 0;
+                float4x4 data = 0;
                 float4 color = 1
             #endif
-                Varyings OUT;
-                float3 positionWS = data.xyz + IN.positionOS.xyz * data.w;
+                float4 positionWS = mul(data, IN.positionOS);
                 OUT.positionWS = positionWS;
 
-                OUT.positionCS = mul(unity_MatrixVP, float4(positionWS, 1.0));
+                OUT.positionCS = mul(unity_MatrixVP, positionWS);
                 OUT.uv = TRANSFORM_TEX(IN.texcoord, _BaseMap);
                 // 法线与雾效因子
-                float3 normalWS = TransformObjectToWorldNormal(IN.normalOS);
+                float3 normalWS = normalize(mul(data, float4(IN.normalOS, 0))).xyz;
                 float fogFactor = ComputeFogFactor(OUT.positionCS.z);
                 OUT.normalWSAndFogFactor = float4(normalWS, fogFactor);
                 OUT.color = color;
@@ -151,12 +152,12 @@ Shader "Custom/TestURPDrawIndirectShader"
             Varyings Vertex(Attributes IN, uint instanceID : SV_InstanceID)
             {
             #if SHADER_TARGET >= 45
-                float4 data = positionBuffer[instanceID];
+                float4x4 data = matricesBuffer[instanceID];
             #else
-                float4 data = 0;
+                float4x4 data = 0;
             #endif
                 Varyings OUT;
-                float3 positionWS = data.xyz + IN.positionOS.xyz * data.w;
+                float3 positionWS = mul(data, IN.positionOS).xyz;
                 float3 normalWS = TransformObjectToWorldNormal(IN.normalOS);
                 float4 positionCS = TransformWorldToHClip(ApplyShadowBias(positionWS, normalWS, _LightDirection));
                 #if UNITY_REVERSED_Z
